@@ -1,0 +1,28 @@
+{
+  "name": "escrowx",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:push": "cd apps/api && npx prisma db push",
+    "db:migrate": "cd apps/api && npx prisma migrate dev",
+    "db:studio": "cd apps/api && npx prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.5.4",
+    "prettier": "^3.3.3",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

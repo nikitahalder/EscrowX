@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ── Lint & type-check ────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/escrowx
+
+      - name: Lint all apps
+        run: npm run lint
+
+  # ── Build ────────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/escrowx
+
+      - name: Build all apps
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/escrowx
+          JWT_SECRET: ci-build-secret-not-for-production
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+          NEXT_PUBLIC_WS_URL: http://localhost:4000
+          NEXT_PUBLIC_STELLAR_NETWORK: testnet
+          NEXT_PUBLIC_USDC_CONTRACT_ID: CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
+
+      - name: Upload API build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-dist-${{ github.sha }}
+          path: apps/api/dist
+          retention-days: 7
+
+  # ── API tests ────────────────────────────────────────────────────────────────
+  test-api:
+    name: Test API
+    runs-on: ubuntu-latest
+    needs: build
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: escrowx_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/escrowx_test
+
+      - name: Push Prisma schema to test DB
+        working-directory: apps/api
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/escrowx_test
+
+      - name: Run API tests
+        working-directory: apps/api
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/escrowx_test
+          JWT_SECRET: ci-test-secret
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test

@@ -1,0 +1,17 @@
+node_modules
+.env
+.env.local
+.env.*.local
+dist
+build
+.next
+*.tsbuildinfo
+.turbo
+coverage
+*.log
+.DS_Store
+Thumbs.db
+prisma/migrations/*.sql.bak
+target/
+*.wasm
+.cargo/registry
