@@ -17,6 +17,8 @@ RUN npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 FROM installer AS builder
+# OpenSSL is required for Prisma to generate the correct engine binaries.
+RUN apk add --no-cache openssl libc6-compat
 COPY --from=pruner /repo/out/full/ .
 RUN cd apps/api && npx prisma generate
 RUN npx turbo run build --filter=@escrowx/api
@@ -26,7 +28,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production PORT=4000
 
-RUN apk add --no-cache dumb-init
+# dumb-init for signal handling; openssl + libc6-compat for Prisma engines on Alpine.
+RUN apk add --no-cache dumb-init openssl libc6-compat
 
 # Non-root user
 RUN addgroup --system --gid 1001 nodejs && \
