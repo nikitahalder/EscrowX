@@ -24,7 +24,7 @@ jobs:
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
-    if: ${{ github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'web' }}
+    if: ${{ (github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'web') && secrets.VERCEL_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v4
