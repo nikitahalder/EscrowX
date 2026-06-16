@@ -13,7 +13,7 @@ FROM node:20-alpine AS installer
 WORKDIR /repo
 COPY --from=pruner /repo/out/json/ .
 COPY --from=pruner /repo/out/package-lock.json ./package-lock.json
-RUN npm ci --include=dev
+RUN npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 FROM installer AS builder
@@ -34,9 +34,6 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Copy hoisted node_modules (workspace deps are installed here)
 COPY --from=builder --chown=nestjs:nodejs /repo/node_modules ./node_modules
-# Explicitly copy prisma package to ensure it is present in the runner stage
-COPY --from=builder --chown=nestjs:nodejs /repo/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nestjs:nodejs /repo/node_modules/@prisma ./node_modules/@prisma
 # Copy built output, Prisma schema, and package manifest
 COPY --from=builder --chown=nestjs:nodejs /repo/apps/api/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /repo/apps/api/prisma ./prisma
@@ -46,5 +43,4 @@ USER nestjs
 EXPOSE 4000
 
 ENTRYPOINT ["dumb-init", "--"]
-# Use node directly to run prisma (bypasses .bin symlink issues in Alpine).
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss && node dist/main"]
+CMD ["node", "dist/main"]
