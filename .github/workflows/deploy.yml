@@ -21,39 +21,57 @@ jobs:
   deploy-web:
     name: Deploy Web → Vercel
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
-    if: ${{ (github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'web') && secrets.VERCEL_TOKEN != '' }}
+    if: ${{ github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'web' }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
+      # The `secrets` context cannot be used in a job-level `if`, so gate the
+      # actual deploy steps on whether the token exists. The job stays green
+      # either way — when no token is configured it simply skips the deploy.
+      - name: Check for Vercel token
+        id: check
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VERCEL_TOKEN secret is not set — skipping automated Vercel deploy. Add the secret in Settings → Secrets and variables → Actions to enable it. The web app can still be deployed from the Vercel dashboard."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.check.outputs.enabled == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.enabled == 'true'
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.check.outputs.enabled == 'true'
         run: npm ci
 
       - name: Install Vercel CLI
+        if: steps.check.outputs.enabled == 'true'
         run: npm install -g vercel@latest
 
       - name: Pull Vercel environment info
+        if: steps.check.outputs.enabled == 'true'
         working-directory: apps/web
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build for production
+        if: steps.check.outputs.enabled == 'true'
         working-directory: apps/web
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel
         id: deploy
+        if: steps.check.outputs.enabled == 'true'
         working-directory: apps/web
         run: |
-          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$url" >> $GITHUB_OUTPUT
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
           echo "Deployed to: $url"
 
   # ── Build & push API Docker image to GHCR ────────────────────────────────────

@@ -13,6 +13,8 @@ target
 **/.env.*
 .turbo
 **/.turbo
+out
+**/out
 coverage
 **/coverage
 *.wasm
