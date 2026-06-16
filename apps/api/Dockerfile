@@ -45,4 +45,4 @@ EXPOSE 4000
 ENTRYPOINT ["dumb-init", "--"]
 # Sync the Prisma schema to the database on startup, then start the API.
 # The project uses `db push` (no migration history), so apply it idempotently.
-CMD ["sh", "-c", "node node_modules/.bin/prisma db push --skip-generate --accept-data-loss && node dist/main"]
+CMD ["sh", "-c", "node_modules/.bin/prisma db push --skip-generate --accept-data-loss && node dist/main"]
