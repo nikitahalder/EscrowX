@@ -15,3 +15,9 @@ prisma/migrations/*.sql.bak
 target/
 *.wasm
 .cargo/registry
+
+# Monorepo uses a single root lockfile; nested workspace lockfiles are stale
+apps/*/package-lock.json
+
+# turbo prune output
+out/
