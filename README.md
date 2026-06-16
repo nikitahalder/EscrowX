@@ -1,5 +1,7 @@
 # EscrowX
 
+**Live Demo:** https://web-inky-nine-38.vercel.app/
+
 A production-grade decentralized escrow platform built on [Stellar](https://stellar.org/) / [Soroban](https://soroban.stellar.org/). Smart contracts lock client funds before work begins and release them only on approval — protecting both clients and freelancers from payment fraud.
 
 ---
