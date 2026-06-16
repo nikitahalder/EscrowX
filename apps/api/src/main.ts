@@ -39,7 +39,8 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.get<number>('PORT', 4000);
-  await app.listen(port);
+  // Bind to 0.0.0.0 so the service is reachable on hosts like Render/Railway/Fly.
+  await app.listen(port, '0.0.0.0');
   console.log(`EscrowX API running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
