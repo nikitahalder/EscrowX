@@ -32,15 +32,15 @@ RUN apk add --no-cache dumb-init
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-# Copy hoisted node_modules (workspace deps are installed here)
+# Preserve the monorepo layout so Node resolves both the root-hoisted modules
+# and the workspace-local modules in apps/api/node_modules (where @nestjs/* live).
 COPY --from=builder --chown=nestjs:nodejs /repo/node_modules ./node_modules
-# Copy built output, Prisma schema, and package manifest
-COPY --from=builder --chown=nestjs:nodejs /repo/apps/api/dist ./dist
-COPY --from=builder --chown=nestjs:nodejs /repo/apps/api/prisma ./prisma
-COPY --from=builder --chown=nestjs:nodejs /repo/apps/api/package.json ./
+COPY --from=builder --chown=nestjs:nodejs /repo/apps/api ./apps/api
 
+WORKDIR /app/apps/api
 USER nestjs
 EXPOSE 4000
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/main"]
+# Sync the Prisma schema, then start the API. prisma resolves from apps/api/node_modules.
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss && node dist/main"]
