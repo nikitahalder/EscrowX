@@ -138,3 +138,69 @@ jobs:
           JWT_SECRET: ci-test-secret
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
+
+  # ── Smart contract: test + WASM build ────────────────────────────────────────
+  contracts:
+    name: Smart Contract (test + wasm build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (with wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo registry & build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/contracts -> target
+
+      - name: Run contract tests
+        working-directory: apps/contracts
+        run: cargo test --features testutils
+
+      - name: Build contract WASM (release)
+        working-directory: apps/contracts
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: escrowx-contract-${{ github.sha }}.wasm
+          path: apps/contracts/target/wasm32-unknown-unknown/release/escrowx_contract.wasm
+          retention-days: 30
+
+  # ── Frontend: install, lint, build, test ─────────────────────────────────────
+  frontend:
+    name: Frontend (lint + build + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+          NEXT_PUBLIC_WS_URL: http://localhost:4000
+          NEXT_PUBLIC_STELLAR_NETWORK: testnet
+          NEXT_PUBLIC_CONTRACT_ID: CDTSW6SSYKQIGF24GKIE5ZRYW3HNX7KNWGVZFYSKAC7XGFH7P6WP42XO
+          NEXT_PUBLIC_USDC_CONTRACT_ID: CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
+          NEXT_PUBLIC_SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
+
+      - name: Test
+        working-directory: apps/web
+        run: npm run test:ci

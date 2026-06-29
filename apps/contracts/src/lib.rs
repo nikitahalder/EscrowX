@@ -4,13 +4,14 @@ mod errors;
 mod events;
 mod types;
 
+#[cfg(test)]
+mod test;
+
 use errors::ContractError;
 use events::*;
 use types::*;
 
-use soroban_sdk::{
-    contract, contractimpl, panic_with_error, token, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Env, String, Vec};
 
 #[contract]
 pub struct EscrowXContract;
@@ -23,7 +24,9 @@ impl EscrowXContract {
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::PlatformWallet, &platform_wallet);
+        env.storage()
+            .instance()
+            .set(&DataKey::PlatformWallet, &platform_wallet);
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
         env.storage().instance().set(&DataKey::ProjectCount, &0u64);
         env.storage().instance().extend_ttl(100_000, 100_000);
@@ -78,7 +81,7 @@ impl EscrowXContract {
             funded_amount: 0,
             released_amount: 0,
             status: ProjectStatus::AwaitingFunding,
-            milestone_count: milestones.len() as u32,
+            milestone_count: milestones.len(),
             created_at: env.ledger().timestamp(),
         };
 
@@ -127,7 +130,11 @@ impl EscrowXContract {
         }
 
         let token_client = token::Client::new(&env, &project.token);
-        token_client.transfer(&funder, &env.current_contract_address(), &project.total_amount);
+        token_client.transfer(
+            &funder,
+            &env.current_contract_address(),
+            &project.total_amount,
+        );
 
         project.funded_amount = project.total_amount;
         project.status = ProjectStatus::Funded;
@@ -266,11 +273,7 @@ impl EscrowXContract {
         }
 
         if fee > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &platform_wallet,
-                &fee,
-            );
+            token_client.transfer(&env.current_contract_address(), &platform_wallet, &fee);
         }
 
         project.released_amount += milestone.amount;
@@ -401,7 +404,11 @@ impl EscrowXContract {
             .instance()
             .get(&DataKey::PlatformWallet)
             .unwrap();
-        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(100);
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(100);
 
         let (client_amount, freelancer_amount) = match resolution {
             DisputeResolution::FullClientRefund => (remaining, 0i128),
@@ -427,18 +434,10 @@ impl EscrowXContract {
             let fee = freelancer_amount * fee_bps as i128 / 10_000;
             let net = freelancer_amount - fee;
             if net > 0 {
-                token_client.transfer(
-                    &env.current_contract_address(),
-                    &project.freelancer,
-                    &net,
-                );
+                token_client.transfer(&env.current_contract_address(), &project.freelancer, &net);
             }
             if fee > 0 {
-                token_client.transfer(
-                    &env.current_contract_address(),
-                    &platform_wallet,
-                    &fee,
-                );
+                token_client.transfer(&env.current_contract_address(), &platform_wallet, &fee);
             }
         }
 
@@ -483,11 +482,7 @@ impl EscrowXContract {
 
         if refund > 0 {
             let token_client = token::Client::new(&env, &project.token);
-            token_client.transfer(
-                &env.current_contract_address(),
-                &project.client,
-                &refund,
-            );
+            token_client.transfer(&env.current_contract_address(), &project.client, &refund);
         }
 
         project.status = ProjectStatus::Cancelled;

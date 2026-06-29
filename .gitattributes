@@ -1,0 +1,14 @@
+# Mark generated/lock files so code-analysis and review tools (and GitHub's
+# diff view) treat them as generated rather than hand-written source. This keeps
+# the large lockfiles from crowding out the actual application + contract source
+# in file-budget-limited reviewers.
+package-lock.json    linguist-generated=true -diff
+apps/contracts/Cargo.lock linguist-generated=true -diff
+**/*.wasm            binary
+
+# Normalize line endings for source so CI (Linux) and local (Windows) agree.
+*.rs    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf

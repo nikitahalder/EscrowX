@@ -17,13 +17,73 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Deploy web to Vercel ──────────────────────────────────────────────────────
-  deploy-web:
-    name: Deploy Web → Vercel
+  # ── Deploy Soroban contract to Stellar testnet ────────────────────────────────
+  deploy-contract:
+    name: Deploy Contract → Stellar
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'web' }}
+    outputs:
+      contract_id: ${{ steps.deploy.outputs.contract_id }}
+    env:
+      STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
+
+    steps:
+      # The `secrets` context cannot be used in a job-level `if`, so gate the
+      # on-chain deploy on whether the signing key exists. The job stays green
+      # when it is absent — the contract is already live at
+      # CDTSW6SSYKQIGF24GKIE5ZRYW3HNX7KNWGVZFYSKAC7XGFH7P6WP42XO.
+      - name: Check for Stellar secret
+        id: check
+        run: |
+          if [ -z "$STELLAR_SECRET_KEY" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::STELLAR_SECRET_KEY secret is not set — skipping automated on-chain deploy. The contract is already deployed; add the secret to enable automated redeploys."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.enabled == 'true'
+
+      - name: Install Rust toolchain (with wasm target)
+        if: steps.check.outputs.enabled == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Stellar CLI
+        if: steps.check.outputs.enabled == 'true'
+        run: cargo install --locked stellar-cli --features opt
+
+      - name: Build contract WASM
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apps/contracts
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Deploy to testnet
+        id: deploy
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apps/contracts
+        run: |
+          contract_id=$(stellar contract deploy \
+            --wasm target/wasm32-unknown-unknown/release/escrowx_contract.wasm \
+            --source "$STELLAR_SECRET_KEY" \
+            --network testnet)
+          echo "Deployed contract: $contract_id"
+          echo "contract_id=$contract_id" >> "$GITHUB_OUTPUT"
+
+  # ── Deploy web to Vercel ──────────────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend → Vercel
+    runs-on: ubuntu-latest
+    needs: [deploy-contract]
     if: ${{ github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'web' }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # Falls back to the already-deployed contract when deploy-contract is skipped.
+      NEXT_PUBLIC_CONTRACT_ID: ${{ needs.deploy-contract.outputs.contract_id || secrets.NEXT_PUBLIC_CONTRACT_ID || 'CDTSW6SSYKQIGF24GKIE5ZRYW3HNX7KNWGVZFYSKAC7XGFH7P6WP42XO' }}
+      NEXT_PUBLIC_SOROBAN_RPC_URL: ${{ secrets.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org' }}
+      NEXT_PUBLIC_NETWORK_PASSPHRASE: ${{ secrets.NEXT_PUBLIC_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015' }}
 
     steps:
       # The `secrets` context cannot be used in a job-level `if`, so gate the
@@ -64,6 +124,9 @@ jobs:
       - name: Build for production
         if: steps.check.outputs.enabled == 'true'
         working-directory: apps/web
+        # NEXT_PUBLIC_* are inherited from the job env (sourced from the
+        # deploy-contract output and GitHub secrets) so the deployed bundle
+        # points at the freshly-deployed contract.
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel

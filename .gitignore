@@ -16,6 +16,9 @@ target/
 *.wasm
 .cargo/registry
 
+# Soroban test snapshot artifacts (regenerated on every `cargo test`)
+test_snapshots/
+
 # Monorepo uses a single root lockfile; nested workspace lockfiles are stale
 apps/*/package-lock.json
 
